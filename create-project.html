@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Projeto - SCRUM Backlog Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="navbar">
+    <a href="index.html">Home</a>
+    <a href="create-person.html">Cadastrar Pessoa</a>
+    <a href="create-project.html">Criar Projeto</a>
+    <a href="create-backlog.html">Criar Backlog</a>
+    <a href="backlogs.html">Backlogs</a>
+    <a href="about.html">Sobre</a>
+</div>
+
+<div class="container">
+    <h1>Criar Projeto</h1>
+    <form id="create-project-form">
+        <!-- Exibe o ID do Projeto automaticamente -->
+        <div class="form-group">
+            <label for="project-id">Código do Projeto:</label>
+            <input type="text" id="project-id" name="project-id" readonly>
+        </div>
+
+        <!-- Nome do Projeto -->
+        <div class="form-group">
+            <label for="project-nome">Nome do Projeto:</label>
+            <input type="text" id="project-nome" name="nome" required>
+        </div>
+
+        <!-- Seleção de Product Owner a partir da lista de pessoas -->
+        <div class="form-group">
+            <label for="product-owner">Product Owner:</label>
+            <select id="product-owner" name="product_owner" required>
+                <option value="">Selecione o Product Owner</option>
+            </select>
+        </div>
+
+        <!-- Seleção de Scrum Master a partir da lista de pessoas -->
+        <div class="form-group">
+            <label for="scrum-master">Scrum Master:</label>
+            <select id="scrum-master" name="scrum_master" required>
+                <option value="">Selecione o Scrum Master</option>
+            </select>
+        </div>
+
+        <!-- Seleção múltipla de equipe -->
+        <div class="form-group">
+            <label for="team">Equipe:</label>
+            <select id="team" name="team_ids" multiple>
+                <!-- Opções serão carregadas pelo JavaScript -->
+            </select>
+        </div>
+
+        <button type="submit">Criar/Alterar Projeto</button>
+        <button type="button" id="delete-project" class="delete-button">Excluir Projeto</button>
+        <button type="button" id="list-projects">Listar Projetos</button>
+    </form>
+
+    <!-- Tabela para listar projetos -->
+    <h2>Projetos</h2>
+    <table id="projects-table">
+        <thead>
+        <tr>
+            <th>Código do Projeto</th>
+            <th>Nome do Projeto</th>
+            <th>Product Owner</th>
+            <th>Scrum Master</th>
+            <th>Equipe</th>
+        </tr>
+        </thead>
+        <tbody id="projects-table-body">
+        <!-- Projetos serão listados aqui -->
+        </tbody>
+    </table>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

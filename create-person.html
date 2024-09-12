@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastrar Pessoa - SCRUM Backlog Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="navbar">
+    <a href="index.html">Home</a>
+    <a href="create-person.html">Cadastrar Pessoa</a>
+    <a href="create-project.html">Criar Projeto</a>
+    <a href="create-backlog.html">Criar Backlog</a>
+    <a href="backlogs.html">Backlogs</a>
+    <a href="about.html">Sobre</a>
+</div>
+
+<div class="container">
+    <h1>Cadastrar Pessoa</h1>
+    <form id="create-person-form">
+        <label for="matricula">Matrícula:</label>
+        <input type="text" id="matricula" name="matricula" readonly><br>
+        <label for="nome">Nome:</label>
+        <input type="text" id="nome" name="nome" required><br>
+        <label for="cargo">Cargo:</label>
+        <input type="text" id="cargo" name="cargo" required><br>
+
+        <button type="submit">Cadastrar/Atualizar Pessoa</button>
+        <button type="button" id="delete-person" class="delete-button">Excluir Pessoa</button>
+    </form>
+
+    <button id="fetch-persons" class="fetch-button">Listar Pessoas</button>
+
+    <h2>Lista de Pessoas</h2>
+    <table id="person-table">
+        <thead>
+        <tr>
+            <th>Matrícula</th>
+            <th>Nome</th>
+            <th>Cargo</th>
+        </tr>
+        </thead>
+        <tbody id="person-table-body">
+        <!-- Rows will be populated dynamically -->
+        </tbody>
+    </table>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Backlog - SCRUM Backlog Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="navbar">
+    <a href="index.html">Home</a>
+    <a href="create-person.html">Cadastrar Pessoa</a>
+    <a href="create-project.html">Criar Projeto</a>
+    <a href="create-backlog.html">Criar Backlog</a>
+    <a href="backlogs.html">Backlogs</a>
+    <a href="about.html">Sobre</a>
+</div>
+
+<div class="container">
+    <h1>Criar Backlog</h1>
+    <form id="create-backlog-form">
+        <label for="projectCode">Código do Projeto:</label>
+        <select id="projectCode" name="codigo_projeto" required>
+            <!-- Options will be populated dynamically -->
+        </select>
+
+        <label for="backlogID">Backlog ID:</label>
+        <input type="text" id="backlogID" name="backlog_id" readonly>
+
+        <label for="backlogName">Nome do Backlog:</label>
+        <input type="text" id="backlogName" name="nome" required>
+
+        <label for="scrumMaster">Scrum Master:</label>
+        <input type="text" id="scrumMaster" name="scrum_master_nome" readonly> <!-- Campo não editável -->
+
+        <label for="descricaoBacklog">Descrição do Backlog:</label>
+        <textarea id="descricaoBacklog" name="descricao" rows="4" maxlength="5000" required></textarea>
+
+        <label for="prazoBacklog">Prazo do Backlog:</label>
+        <input type="date" id="prazoBacklog" name="prazo" required>
+
+        <label for="situacaoBacklog">Situação:</label>
+        <select id="situacaoBacklog" name="situacao" required>
+            <option value="A iniciar">A iniciar</option>
+            <option value="Em execução">Em execução</option>
+            <option value="Finalizada">Finalizada</option>
+        </select>
+
+        <button type="submit" class="submit-btn">Salvar</button>
+    </form>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
+
+
+
+
