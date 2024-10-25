@@ -1,475 +1,364 @@
-// Função para carregar o próximo ID da matrícula e lista de pessoas
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        // Fetch the next matricula ID
-        const response = await fetch('http://localhost:3000/next-matricula');
-        const result = await response.json();
-        if (response.ok) {
-            const matriculaElement = document.getElementById('matricula');
-            if (matriculaElement) {
-                matriculaElement.value = result.nextMatricula;
-            } else {
-                console.error('Elemento para o próximo ID da matrícula não encontrado.');
-            }
+const express = require('express');
+const mysql = require('mysql2');
+const cors = require('cors');
+const app = express();
+const port = 3000;
+
+app.use(express.json());
+app.use(cors());
+
+// Configuração do banco de dados MySQL
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '123456',
+    database: 'scrum_db'
+});
+
+// Conectar ao banco de dados
+db.connect((err) => {
+    if (err) {
+        console.error('Erro ao conectar ao banco de dados:', err);
+        return;
+    }
+    console.log('Conectado ao banco de dados MySQL');
+});
+
+// Rota para obter o próximo ID de matrícula
+app.get('/next-matricula', (req, res) => {
+    const sql = 'SELECT COALESCE(MAX(matricula), 0) + 1 AS nextMatricula FROM pessoas';
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar próximo ID:', err);
+            return res.status(500).json({ message: 'Erro ao buscar próximo ID' });
+        }
+        res.json({ nextMatricula: results[0].nextMatricula });
+    });
+});
+
+// Rota para obter o próximo ID de projeto
+app.get('/next-project-id', (req, res) => {
+    const sql = 'SELECT COALESCE(MAX(id), 0) + 1 AS nextProjectId FROM projetos';
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar próximo ID de projeto:', err);
+            return res.status(500).json({ message: 'Erro ao buscar próximo ID de projeto' });
+        }
+        res.json({ nextProjectId: results[0].nextProjectId });
+    });
+});
+
+// CRUD para pessoas
+app.post('/person', (req, res) => {
+    const { matricula, nome, cargo } = req.body;
+    const sql = 'INSERT INTO pessoas (matricula, nome, cargo) VALUES (?, ?, ?)';
+    db.query(sql, [matricula, nome, cargo], (err, result) => {
+        if (err) {
+            console.error('Erro ao criar pessoa:', err);
+            return res.status(500).json({ message: 'Erro ao criar pessoa' });
+        }
+        res.status(201).json({ id: result.insertId });
+    });
+});
+
+app.get('/persons', (req, res) => {
+    const sql = 'SELECT matricula, nome, cargo FROM pessoas';
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar pessoas:', err);
+            return res.status(500).json({ message: 'Erro ao buscar pessoas' });
+        }
+        res.status(200).json(results);
+    });
+});
+
+app.get('/persons/:matricula', (req, res) => {
+    const { matricula } = req.params;
+    const sql = 'SELECT * FROM pessoas WHERE matricula = ?';
+    db.query(sql, [matricula], (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar pessoa:', err);
+            return res.status(500).json({ message: 'Erro ao buscar pessoa' });
+        }
+        if (results.length > 0) {
+            res.status(200).json(results[0]);
         } else {
-            console.error('Erro ao buscar próximo ID da matrícula:', result.message);
+            res.status(404).json({ message: 'Pessoa não encontrada' });
+        }
+    });
+});
+
+app.put('/persons/:matricula', (req, res) => {
+    const { matricula } = req.params;
+    const { nome, cargo } = req.body;
+    const sql = 'UPDATE pessoas SET nome = ?, cargo = ? WHERE matricula = ?';
+    db.query(sql, [nome, cargo, matricula], (err, result) => {
+        if (err) {
+            console.error('Erro ao atualizar pessoa:', err);
+            return res.status(500).json({ message: 'Erro ao atualizar pessoa' });
+        }
+        if (result.affectedRows > 0) {
+            res.status(200).json({ message: 'Pessoa atualizada com sucesso' });
+        } else {
+            res.status(404).json({ message: 'Pessoa não encontrada' });
+        }
+    });
+});
+
+// Rota para excluir uma pessoa
+
+app.delete('/persons/:matricula', (req, res) => {
+    const matricula = req.params.matricula;
+
+    console.log(`Iniciando a exclusão da pessoa com matrícula: ${matricula}`);
+
+    // Iniciar uma transação para garantir integridade dos dados
+    db.beginTransaction((err) => {
+        if (err) {
+            console.error('Erro ao iniciar a transação:', err);
+            return res.status(500).json({ message: 'Erro ao iniciar a transação' });
         }
 
-        // Fetch and populate the Product Owner, Scrum Master, and Team selection lists
-        const personsResponse = await fetch('http://localhost:3000/persons');
-        const persons = await personsResponse.json();
-        if (personsResponse.ok) {
-            const productOwnerSelect = document.getElementById('product-owner');
-            const scrumMasterSelect = document.getElementById('scrum-master');
-            const teamSelect = document.getElementById('team');
+        console.log('Transação iniciada com sucesso.');
 
-            if (productOwnerSelect && scrumMasterSelect && teamSelect) {
-                persons.forEach(person => {
-                    const option = document.createElement('option');
-                    option.value = person.matricula;
-                    option.textContent = person.nome;
-                    productOwnerSelect.appendChild(option.cloneNode(true));
-                    scrumMasterSelect.appendChild(option.cloneNode(true));
-
-                    // Adiciona a opção de equipe com a mesma matrícula
-                    const teamOption = document.createElement('option');
-                    teamOption.value = person.matricula;
-                    teamOption.textContent = person.nome;
-                    teamSelect.appendChild(teamOption);
+        // 1. Remover associações da equipe
+        db.query('DELETE FROM equipe_projeto WHERE pessoa_id = ?', [matricula], (err) => {
+            if (err) {
+                console.error('Erro ao remover associações de equipe:', err);
+                return db.rollback(() => {
+                    res.status(500).json({ message: 'Erro ao remover associações de equipe' });
                 });
-            } else {
-                console.error('Elementos para seleção não encontrados.');
             }
-        } else {
-            console.error('Erro ao buscar pessoas:', persons.message);
+
+            console.log('Associações de equipe removidas com sucesso.');
+
+            // 2. Excluir pessoa
+            db.query('DELETE FROM pessoas WHERE matricula = ?', [matricula], (err, result) => {
+                if (err) {
+                    console.error('Erro ao excluir pessoa:', err);
+                    return db.rollback(() => {
+                        res.status(500).json({ message: 'Erro ao excluir pessoa' });
+                    });
+                }
+
+                if (result.affectedRows === 0) {
+                    console.error('Pessoa não encontrada.');
+                    return db.rollback(() => {
+                        res.status(404).json({ message: 'Pessoa não encontrada' });
+                    });
+                }
+
+                console.log('Pessoa excluída com sucesso.');
+
+                // 3. Commit da transação
+                db.commit((err) => {
+                    if (err) {
+                        console.error('Erro ao finalizar a transação:', err);
+                        return db.rollback(() => {
+                            res.status(500).json({ message: 'Erro ao finalizar a transação' });
+                        });
+                    }
+                    res.json({ message: 'Pessoa excluída com sucesso!' });
+                });
+            });
+        });
+    });
+});
+
+// Rota para criar um novo projeto
+app.post('/projects', async (req, res) => {
+    const { nome, product_owner, scrum_master, team_ids } = req.body;
+
+    try {
+        // Inserir o projeto na tabela 'projetos'
+        const [result] = await db.execute('INSERT INTO projetos (nome, product_owner, scrum_master) VALUES (?, ?, ?)',
+            [nome, product_owner, scrum_master]
+        );
+
+        const projectId = result.insertId; // Obter o ID do projeto recém-inserido
+
+        // Inserir equipe no projeto
+        if (Array.isArray(team_ids) && team_ids.length > 0) {
+            const teamInsertPromises = team_ids.map(pessoa_id => {
+                return db.execute('INSERT INTO equipe_projeto (projeto_id, pessoa_id) VALUES (?, ?)',
+                    [projectId, pessoa_id]
+                );
+            });
+            await Promise.all(teamInsertPromises);
         }
+
+        // Responder com sucesso
+        res.status(201).json({ message: 'Projeto criado com sucesso', projectId });
     } catch (error) {
-        console.error('Erro na requisição:', error);
+        console.error('Erro ao criar o projeto:', error);
+        res.status(500).json({ error: 'Erro ao criar o projeto' });
     }
 });
 
-// Função para carregar os dados da pessoa para edição
-async function loadPerson(matricula) {
-    try {
-        const response = await fetch(`http://localhost:3000/persons/${matricula}`);
-        const person = await response.json();
-        if (response.ok) {
-            document.getElementById('matricula').value = person.matricula;
-            document.getElementById('nome').value = person.nome;
-            document.getElementById('cargo').value = person.cargo;
-            document.getElementById('matricula').disabled = true; // Desabilita o campo de matrícula
-        } else {
-            console.error('Erro ao buscar pessoa para edição:', person.message);
+// Rota para listar projetos
+app.get('/projects', (req, res) => {
+    const query = `
+        SELECT p.id, p.nome, 
+            po.nome AS product_owner_nome, 
+            sm.nome AS scrum_master_nome,
+            GROUP_CONCAT(e.nome SEPARATOR ', ') AS equipe
+        FROM projetos p
+        LEFT JOIN pessoas po ON p.product_owner = po.matricula
+        LEFT JOIN pessoas sm ON p.scrum_master = sm.matricula
+        LEFT JOIN equipe_projeto ep ON p.id = ep.projeto_id
+        LEFT JOIN pessoas e ON ep.pessoa_id = e.matricula
+        GROUP BY p.id, p.nome, po.nome, sm.nome
+    `;
+
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar projetos:', err);
+            return res.status(500).json({ message: 'Erro ao buscar projetos' });
         }
-    } catch (error) {
-        console.error('Erro na requisição:', error);
-    }
-}
 
-// Função para criar ou atualizar uma pessoa
-const createPersonForm = document.getElementById('create-person-form');
-if (createPersonForm) {
-    createPersonForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const matricula = document.getElementById('matricula').value;
-        const nome = document.getElementById('nome').value;
-        const cargo = document.getElementById('cargo').value;
-
-        try {
-            let response;
-            if (document.getElementById('matricula').disabled) {
-                // Atualiza a pessoa existente
-                response = await fetch(`http://localhost:3000/persons/${matricula}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ nome, cargo }),
-                });
-            } else {
-                // Cria uma nova pessoa
-                response = await fetch('http://localhost:3000/person', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ matricula, nome, cargo }),
-                });
-            }
-
-            const result = await response.json();
-
-            if (response.ok) {
-                alert('Pessoa cadastrada/atualizada com sucesso! ID: ' + result.id);
-                // Clear form and refresh matricula ID
-                createPersonForm.reset();
-                document.getElementById('matricula').disabled = false;
-                const refreshResponse = await fetch('http://localhost:3000/next-matricula');
-                const refreshResult = await refreshResponse.json();
-                if (refreshResponse.ok) {
-                    document.getElementById('matricula').value = refreshResult.nextMatricula;
-                }
-            } else {
-                alert('Erro ao cadastrar/atualizar pessoa: ' + result.message);
-            }
-        } catch (error) {
-            console.error('Erro na requisição:', error);
-            alert('Erro na requisição');
-        }
+        res.json(results);
     });
-} else {
-    console.error('Formulário de criação de pessoa não encontrado.');
-}
-
-// Função para excluir uma pessoa
-const deletePersonButton = document.getElementById('delete-person');
-if (deletePersonButton) {
-    deletePersonButton.addEventListener('click', async () => {
-        const matricula = document.getElementById('matricula').value;
-        if (!matricula) {
-            alert('Nenhuma pessoa selecionada para exclusão.');
-            return;
-        }
-
-        if (confirm('Deseja realmente excluir esta pessoa?')) {
-            try {
-                const response = await fetch(`http://localhost:3000/persons/${matricula}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                // Verifique se a resposta é um JSON válido
-                const result = await response.json().catch(() => ({}));
-
-                if (response.ok) {
-                    alert('Pessoa excluída com sucesso!');
-                    // Clear form and refresh matricula ID
-                    document.getElementById('create-person-form').reset();
-                    document.getElementById('matricula').disabled = false;
-
-                    // Refresh the matricula ID
-                    const refreshResponse = await fetch('http://localhost:3000/next-matricula');
-                    const refreshResult = await refreshResponse.json();
-                    if (refreshResponse.ok) {
-                        document.getElementById('matricula').value = refreshResult.nextMatricula;
-                    } else {
-                        console.error('Erro ao obter o próximo ID de matrícula:', await refreshResponse.text());
-                    }
-
-                    // Refresh the list of people
-                    const fetchPersonsButton = document.getElementById('fetch-persons');
-                    if (fetchPersonsButton) {
-                        fetchPersonsButton.click();
-                    }
-                } else {
-                    alert('Erro ao excluir pessoa: ' + result.message || 'Erro desconhecido');
-                }
-            } catch (error) {
-                console.error('Erro na requisição:', error);
-                alert('Erro na requisição');
-            }
-        }
-    });
-} else {
-    console.error('Botão de excluir pessoa não encontrado.');
-}
-
-
-// Função para listar pessoas
-const fetchPersonsButton = document.getElementById('fetch-persons');
-if (fetchPersonsButton) {
-    fetchPersonsButton.addEventListener('click', async () => {
-        try {
-            const response = await fetch('http://localhost:3000/persons');
-            const result = await response.json();
-
-            if (response.ok) {
-                const personTableBody = document.getElementById('person-table-body');
-                if (personTableBody) {
-                    personTableBody.innerHTML = ''; // Limpa a tabela antes de adicionar novos itens
-                    result.forEach(person => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${person.matricula}</td>
-                            <td>${person.nome}</td>
-                            <td>${person.cargo}</td>
-                        `;
-                        row.addEventListener('dblclick', () => {
-                            loadPerson(person.matricula); // Carrega os dados da pessoa para edição
-                        });
-                        personTableBody.appendChild(row);
-                    });
-                } else {
-                    console.error('Elemento para tabela de pessoas não encontrado.');
-                }
-            } else {
-                alert('Erro ao buscar pessoas: ' + result.message);
-            }
-        } catch (error) {
-            console.error('Erro na requisição:', error);
-            alert('Erro na requisição');
-        }
-    });
-} else {
-    console.error('Botão de buscar pessoas não encontrado.');
-}
-
-// Função para carregar o próximo ID do projeto e a lista de pessoas
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        // Fetch the next project ID
-        const projectResponse = await fetch('http://localhost:3000/next-project-id');
-        const projectResult = await projectResponse.json();
-        if (projectResponse.ok) {
-            const projectIdElement = document.getElementById('project-id');
-            if (projectIdElement) {
-                projectIdElement.value = projectResult.nextProjectId; // Define o valor do campo ID do projeto
-            } else {
-                console.error('Elemento para o próximo ID do projeto não encontrado.');
-            }
-        } else {
-            console.error('Erro ao buscar próximo ID do projeto:', projectResult.message);
-        }
-
-        // Fetch and populate the Product Owner, Scrum Master, and Team selection lists
-        const personsResponse = await fetch('http://localhost:3000/persons');
-        const persons = await personsResponse.json();
-        if (personsResponse.ok) {
-            const productOwnerSelect = document.getElementById('product-owner');
-            const scrumMasterSelect = document.getElementById('scrum-master');
-            const teamSelect = document.getElementById('team');
-
-            if (productOwnerSelect && scrumMasterSelect && teamSelect) {
-                // Limpa as opções duplicadas antes de adicionar novas
-                productOwnerSelect.innerHTML = '<option value="">Selecione o Product Owner</option>';
-                scrumMasterSelect.innerHTML = '<option value="">Selecione o Scrum Master</option>';
-                teamSelect.innerHTML = '';
-
-                // Preenche as listas suspensas
-                persons.forEach(person => {
-                    const option = document.createElement('option');
-                    option.value = person.matricula;
-                    option.textContent = person.nome;
-
-                    // Adiciona a opção ao Product Owner e Scrum Master
-                    productOwnerSelect.appendChild(option.cloneNode(true));
-                    scrumMasterSelect.appendChild(option.cloneNode(true));
-
-                    // Adiciona a opção de equipe
-                    const teamOption = document.createElement('option');
-                    teamOption.value = person.matricula;
-                    teamOption.textContent = person.nome;
-                    teamSelect.appendChild(teamOption);
-                });
-            } else {
-                console.error('Elementos para seleção não encontrados.');
-            }
-        } else {
-            console.error('Erro ao buscar pessoas:', persons.message);
-        }
-    } catch (error) {
-        console.error('Erro na requisição:', error);
-    }
 });
 
-// Função para criar um projeto
-const createProjectForm = document.getElementById('create-project-form');
-if (createProjectForm) {
-    createProjectForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+// Rota para obter todos os membros e os membros associados a um projeto específico
+app.get('/project/:id/team-members', (req, res) => {
+    const { id } = req.params;
 
-        const nome = document.getElementById('project-nome').value;
-        const productOwner = document.getElementById('product-owner').value;
-        const scrumMaster = document.getElementById('scrum-master').value;
+    // Obter todos os membros da equipe
+    const allMembersQuery = 'SELECT matricula, nome FROM pessoas';
 
-        // Obter IDs da equipe selecionada
-        const teamSelect = document.getElementById('team');
-        const teamIds = teamSelect ? Array.from(teamSelect.selectedOptions).map(option => option.value) : [];
+    // Obter membros associados ao projeto
+    const projectMembersQuery = `
+        SELECT p.matricula, p.nome 
+        FROM pessoas p
+        JOIN equipe_projeto ep ON p.matricula = ep.pessoa_id
+        WHERE ep.projeto_id = ?
+    `;
 
-        try {
-            const response = await fetch('http://localhost:3000/project', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ nome, product_owner: productOwner, scrum_master: scrumMaster, team_ids: teamIds }),
-            });
+    db.query(allMembersQuery, (err, allMembers) => {
+        if (err) {
+            console.error('Erro ao buscar todos os membros:', err);
+            return res.status(500).json({ message: 'Erro ao buscar todos os membros' });
+        }
 
-            const result = await response.json();
-
-            if (response.ok) {
-                alert('Projeto cadastrado com sucesso! ID: ' + result.id);
-                // Limpar formulário
-                createProjectForm.reset();
-                // Atualizar próximo ID do projeto
-                const refreshResponse = await fetch('http://localhost:3000/next-project-id');
-                const refreshResult = await refreshResponse.json();
-                if (refreshResponse.ok) {
-                    const projectIdElement = document.getElementById('project-id');
-                    if (projectIdElement) {
-                        projectIdElement.value = refreshResult.nextProjectId;
-                    }
-                }
-            } else {
-                alert('Erro ao cadastrar projeto: ' + result.message);
+        db.query(projectMembersQuery, [id], (err, projectMembers) => {
+            if (err) {
+                console.error('Erro ao buscar membros do projeto:', err);
+                return res.status(500).json({ message: 'Erro ao buscar membros do projeto' });
             }
-        } catch (error) {
-            console.error('Erro na requisição:', error);
-            alert('Erro na requisição');
-        }
+
+            const projectMemberIds = projectMembers.map(member => member.matricula);
+            const response = allMembers.map(member => ({
+                ...member,
+                selected: projectMemberIds.includes(member.matricula)
+            }));
+
+            res.json(response);
+        });
     });
-} else {
-    console.error('Formulário de criação de projeto não encontrado.');
-}
+});
 
-document.addEventListener('DOMContentLoaded', function () {
-    const createProjectForm = document.getElementById('create-project-form');
-    const listProjectsButton = document.getElementById('list-projects');
-    const projectsTableBody = document.getElementById('projects-table-body');
-    let currentProjectId = null;
+// Rota para obter detalhes de um projeto específico
+app.get('/projects/:id', (req, res) => {
+    const { id } = req.params;
 
-    // Função para carregar a lista de projetos
-    function loadProjects() {
-        fetch('http://localhost:3000/projects')
-            .then(response => response.json())
-            .then(projects => {
-                projectsTableBody.innerHTML = '';
-                projects.forEach(project => {
-                    const row = document.createElement('tr');
-                    row.dataset.id = project.id;
-                    row.innerHTML = `
-                        <td>${project.id}</td>
-                        <td>${project.nome}</td>
-                        <td>${project.product_owner_nome}</td>
-                        <td>${project.scrum_master_nome}</td>
-                        <td>${project.equipe}</td>
-                    `;
-                    row.addEventListener('dblclick', () => {
-                        currentProjectId = project.id;
-                        loadProjectData(currentProjectId);
-                    });
-                    projectsTableBody.appendChild(row);
-                });
-            });
-    }
+    const query = `
+        SELECT p.id, p.nome, 
+            p.product_owner AS product_owner_matricula, 
+            po.nome AS product_owner_nome,
+            p.scrum_master AS scrum_master_matricula,
+            sm.nome AS scrum_master_nome,
+            GROUP_CONCAT(e.nome SEPARATOR ', ') AS equipe
+        FROM projetos p
+        LEFT JOIN pessoas po ON p.product_owner = po.matricula
+        LEFT JOIN pessoas sm ON p.scrum_master = sm.matricula
+        LEFT JOIN equipe_projeto ep ON p.id = ep.projeto_id
+        LEFT JOIN pessoas e ON ep.pessoa_id = e.matricula
+        WHERE p.id = ?
+        GROUP BY p.id, p.nome, p.product_owner, po.nome, p.scrum_master, sm.nome
+    `;
 
-// Função para carregar dados de um projeto específico
-    function loadProjectData(projectId) {
-        // Carregar dados do projeto
-        fetch(`http://localhost:3000/projects/${projectId}`)
-            .then(response => response.json())
-            .then(project => {
-                document.getElementById('project-id').value = project.id;
-                document.getElementById('project-nome').value = project.nome;
+    db.query(query, [id], (err, results) => {
+        if (err) {
+            console.error('Erro ao buscar projeto:', err);
+            return res.status(500).json({ message: 'Erro ao buscar projeto' });
+        }
 
-                // Carregar e preencher as listas suspensas de Product Owner e Scrum Master
-                fetch('http://localhost:3000/persons') // Ajuste a URL conforme necessário
-                    .then(response => response.json())
-                    .then(persons => {
-                        const productOwnerSelect = document.getElementById('product-owner');
-                        const scrumMasterSelect = document.getElementById('scrum-master');
-
-                        // Limpar e preencher as listas suspensas
-                        productOwnerSelect.innerHTML = '<option value="">Selecione o Product Owner</option>';
-                        scrumMasterSelect.innerHTML = '<option value="">Selecione o Scrum Master</option>';
-
-                        persons.forEach(person => {
-                            const option = document.createElement('option');
-                            option.value = person.matricula;
-                            option.textContent = person.nome;
-                            productOwnerSelect.appendChild(option.cloneNode(true)); // Clonando para adicionar ao Scrum Master também
-                            scrumMasterSelect.appendChild(option);
-                        });
-
-                        // Definir a seleção para Product Owner e Scrum Master
-                        if (productOwnerSelect && project.product_owner_matricula) {
-                            productOwnerSelect.value = project.product_owner_matricula; // Definir a matrícula do PO
-                        }
-
-                        if (scrumMasterSelect && project.scrum_master_matricula) {
-                            scrumMasterSelect.value = project.scrum_master_matricula; // Definir a matrícula do SM
-                        }
-                    });
-
-                // Carregar equipe (sem alterações)
-                fetch(`http://localhost:3000/project/${projectId}/team-members`)
-                    .then(response => response.json())
-                    .then(data => {
-                        const allMembers = data;
-                        const teamSelect = document.getElementById('team');
-                        teamSelect.innerHTML = '';
-
-                        allMembers.forEach(member => {
-                            const option = document.createElement('option');
-                            option.value = member.matricula;
-                            option.textContent = member.nome;
-                            if (member.selected) {
-                                option.selected = true; // Marcar como selecionado
-                            }
-                            teamSelect.appendChild(option);
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Erro ao carregar dados da equipe:', error);
-                    });
-            })
-            .catch(error => {
-                console.error('Erro ao carregar dados do projeto:', error);
-            });
-    }
-
-    // Listar projetos ao clicar no botão
-    listProjectsButton.addEventListener('click', loadProjects);
-
-// Salvar ou atualizar um projeto
-    createProjectForm.addEventListener('submit', function (event) {
-        event.preventDefault();
-
-        const projectId = document.getElementById('project-id').value;
-        const projectData = {
-            nome: document.getElementById('project-nome').value,
-            product_owner: document.getElementById('product-owner').value,
-            scrum_master: document.getElementById('scrum-master').value,
-            team_ids: Array.from(document.getElementById('team').selectedOptions).map(option => option.value)
-        };
-
-        if (projectId) {
-            // Atualizar projeto existente
-            fetch(`http://localhost:3000/projects/${projectId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(projectData)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    loadProjects(); // Atualize a lista de projetos
-                })
-                .catch(error => {
-                    console.error('Erro ao atualizar projeto:', error);
-                });
+        if (results.length > 0) {
+            res.json(results[0]);
         } else {
-            // Criar novo projeto
-            fetch('http://localhost:3000/projects', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(projectData)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    loadProjects(); // Atualize a lista de projetos
-                })
-                .catch(error => {
-                    console.error('Erro ao criar projeto:', error);
-                });
+            res.status(404).json({ message: 'Projeto não encontrado' });
         }
     });
+});
+
+// Rota para atualizar um projeto
+app.put('/projects/:id', (req, res) => {
+    const { id } = req.params;
+    const { nome, product_owner, scrum_master, team_ids } = req.body;
+
+    // Atualizar o projeto
+    const sqlProject = 'UPDATE projetos SET nome = ?, product_owner = ?, scrum_master = ? WHERE id = ?';
+    db.query(sqlProject, [nome, product_owner, scrum_master, id], (err) => {
+        if (err) {
+            console.error('Erro ao atualizar projeto:', err);
+            return res.status(500).json({ message: 'Erro ao atualizar projeto' });
+        }
+
+        // Atualizar equipe
+        const deleteTeamQuery = 'DELETE FROM equipe_projeto WHERE projeto_id = ?';
+        db.query(deleteTeamQuery, [id], (err) => {
+            if (err) {
+                console.error('Erro ao remover equipe do projeto:', err);
+                return res.status(500).json({ message: 'Erro ao remover equipe do projeto' });
+            }
+
+            if (team_ids && team_ids.length > 0) {
+                const insertTeamQuery = 'INSERT INTO equipe_projeto (projeto_id, pessoa_id) VALUES ?';
+                const teamValues = team_ids.map(pessoaId => [id, pessoaId]);
+
+                db.query(insertTeamQuery, [teamValues], (err) => {
+                    if (err) {
+                        console.error('Erro ao adicionar equipe ao projeto:', err);
+                        return res.status(500).json({ message: 'Erro ao adicionar equipe ao projeto' });
+                    }
+
+                    res.json({ message: 'Projeto atualizado com sucesso' });
+                });
+            } else {
+                res.json({ message: 'Projeto atualizado com sucesso' });
+            }
+        });
+    });
+});
+
+
+/*// Rota para excluir um projeto
+app.delete('/projects/:id', (req, res) => {
+    const { id } = req.params;
+
+    db.query('DELETE FROM equipe_projeto WHERE projeto_id = ?', [id], (err) => {
+        if (err) {
+            console.error('Erro ao remover equipe do projeto:', err);
+            return res.status(500).json({ message: 'Erro ao remover equipe do projeto' });
+        }
+
+        db.query('DELETE FROM projetos WHERE id = ?', [id], (err, result) => {
+            if (err) {
+                console.error('Erro ao excluir projeto:', err);
+                return res.status(500).json({ message: 'Erro ao excluir projeto' });
+            }
+
+            if (result.affectedRows === 0) {
+                res.status(404).json({ message: 'Projeto não encontrado' });
+            } else {
+                res.json({ message: 'Projeto excluído com sucesso!' });
+            }
+        });
+    });
+});*/
+
+// Iniciar o servidor
+app.listen(port, () => {
+    console.log(`Servidor rodando em http://localhost:${port}`);
 });
