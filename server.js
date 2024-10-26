@@ -155,29 +155,46 @@ app.delete('/persons/:matricula', (req, res) => {
 app.post('/projects', async (req, res) => {
     const { nome, product_owner, scrum_master, team_ids } = req.body;
 
+    console.log('Dados recebidos:', { nome, product_owner, scrum_master, team_ids });
+
     try {
         // Inserir o projeto na tabela 'projetos'
-        const [result] = await db.execute('INSERT INTO projetos (nome, product_owner, scrum_master) VALUES (?, ?, ?)',
+        const [result] = await db.promise().execute(
+            'INSERT INTO projetos (nome, product_owner, scrum_master) VALUES (?, ?, ?)',
             [nome, product_owner, scrum_master]
         );
 
-        const projectId = result.insertId; // Obter o ID do projeto recém-inserido
+        const projectId = result.insertId;
+        console.log('Projeto criado com ID:', projectId);
 
-        // Inserir equipe no projeto
+        // Verificar se team_ids é um array antes de tentar iterar
         if (Array.isArray(team_ids) && team_ids.length > 0) {
             const teamInsertPromises = team_ids.map(pessoa_id => {
-                return db.execute('INSERT INTO equipe_projeto (projeto_id, pessoa_id) VALUES (?, ?)',
+                return db.promise().execute(
+                    'INSERT INTO equipe_projeto (projeto_id, pessoa_id) VALUES (?, ?)',
                     [projectId, pessoa_id]
                 );
             });
-            await Promise.all(teamInsertPromises);
+
+            // Aguardar a conclusão de todas as inserções
+            const results = await Promise.allSettled(teamInsertPromises);
+
+            const failedInserts = results.filter(result => result.status === 'rejected');
+            if (failedInserts.length > 0) {
+                console.error('Algumas inserções de equipe falharam:', failedInserts);
+                return res.status(500).json({
+                    error: 'Erro ao criar o projeto',
+                    details: 'Falha na inserção da equipe'
+                });
+            }
+        } else {
+            console.log('Nenhuma equipe para inserir.');
         }
 
-        // Responder com sucesso
         res.status(201).json({ message: 'Projeto criado com sucesso', projectId });
     } catch (error) {
         console.error('Erro ao criar o projeto:', error);
-        res.status(500).json({ error: 'Erro ao criar o projeto' });
+        res.status(500).json({ error: 'Erro ao criar o projeto', details: error.message });
     }
 });
 

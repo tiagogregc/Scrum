@@ -106,64 +106,50 @@ app.put('/persons/:matricula', (req, res) => {
 });
 
 // Rota para excluir uma pessoa
-
 app.delete('/persons/:matricula', (req, res) => {
     const matricula = req.params.matricula;
 
     console.log(`Iniciando a exclusão da pessoa com matrícula: ${matricula}`);
 
-    // Iniciar uma transação para garantir integridade dos dados
-    db.beginTransaction((err) => {
+    // 1. Verificar se a pessoa é product owner ou scrum master em projetos
+    const checkAssociationsQuery = `
+        SELECT COUNT(*) AS count 
+        FROM projetos 
+        WHERE product_owner = ? OR scrum_master = ? OR id IN (
+            SELECT projeto_id 
+            FROM equipe_projeto 
+            WHERE pessoa_id = ?
+        )
+    `;
+
+    db.query(checkAssociationsQuery, [matricula, matricula, matricula], (err, results) => {
         if (err) {
-            console.error('Erro ao iniciar a transação:', err);
-            return res.status(500).json({ message: 'Erro ao iniciar a transação' });
+            console.error('Erro ao verificar associações de projeto:', err);
+            return res.status(500).json({ message: 'Erro ao verificar associações de projeto' });
         }
 
-        console.log('Transação iniciada com sucesso.');
+        if (results[0].count > 0) {
+            return res.status(400).json({ message: 'Exclusão não permitida: Pessoa cadastrada em projeto.' });
+        }
 
-        // 1. Remover associações da equipe
-        db.query('DELETE FROM equipe_projeto WHERE pessoa_id = ?', [matricula], (err) => {
+        // 2. Excluir pessoa
+        db.query('DELETE FROM pessoas WHERE matricula = ?', [matricula], (err, result) => {
             if (err) {
-                console.error('Erro ao remover associações de equipe:', err);
-                return db.rollback(() => {
-                    res.status(500).json({ message: 'Erro ao remover associações de equipe' });
-                });
+                console.error('Erro ao excluir pessoa:', err);
+                return res.status(500).json({ message: 'Erro ao excluir pessoa' });
             }
 
-            console.log('Associações de equipe removidas com sucesso.');
+            if (result.affectedRows === 0) {
+                console.error('Pessoa não encontrada.');
+                return res.status(404).json({ message: 'Pessoa não encontrada' });
+            }
 
-            // 2. Excluir pessoa
-            db.query('DELETE FROM pessoas WHERE matricula = ?', [matricula], (err, result) => {
-                if (err) {
-                    console.error('Erro ao excluir pessoa:', err);
-                    return db.rollback(() => {
-                        res.status(500).json({ message: 'Erro ao excluir pessoa' });
-                    });
-                }
-
-                if (result.affectedRows === 0) {
-                    console.error('Pessoa não encontrada.');
-                    return db.rollback(() => {
-                        res.status(404).json({ message: 'Pessoa não encontrada' });
-                    });
-                }
-
-                console.log('Pessoa excluída com sucesso.');
-
-                // 3. Commit da transação
-                db.commit((err) => {
-                    if (err) {
-                        console.error('Erro ao finalizar a transação:', err);
-                        return db.rollback(() => {
-                            res.status(500).json({ message: 'Erro ao finalizar a transação' });
-                        });
-                    }
-                    res.json({ message: 'Pessoa excluída com sucesso!' });
-                });
-            });
+            console.log('Pessoa excluída com sucesso.');
+            res.json({ message: 'Pessoa excluída com sucesso!' });
         });
     });
 });
+
 
 // Rota para criar um novo projeto
 app.post('/projects', async (req, res) => {

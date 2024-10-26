@@ -280,7 +280,7 @@ if (createProjectForm) {
         const teamIds = teamSelect ? Array.from(teamSelect.selectedOptions).map(option => option.value) : [];
 
         try {
-            const response = await fetch('http://localhost:3000/project', {
+            const response = await fetch('http://localhost:3000/projects', {  // Alteração aqui: de 'project' para 'projects'
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -291,8 +291,7 @@ if (createProjectForm) {
             const result = await response.json();
 
             if (response.ok) {
-                alert('Projeto cadastrado com sucesso! ID: ' + result.id);
-                // Limpar formulário
+                alert('Projeto cadastrado com sucesso! ID: ' + result.projectId); // Corrigido para 'result.projectId'
                 createProjectForm.reset();
                 // Atualizar próximo ID do projeto
                 const refreshResponse = await fetch('http://localhost:3000/next-project-id');
