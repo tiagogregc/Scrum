@@ -335,32 +335,34 @@ app.put('/projects/:id', (req, res) => {
     });
 });
 
-
-
-/*// Rota para excluir um projeto
+// Rota para excluir um projeto
 app.delete('/projects/:id', (req, res) => {
     const { id } = req.params;
 
-    db.query('DELETE FROM equipe_projeto WHERE projeto_id = ?', [id], (err) => {
+    // Primeiro, exclua as entradas relacionadas na tabela equipe_projeto
+    const sqlDeleteTeam = 'DELETE FROM equipe_projeto WHERE projeto_id = ?';
+    db.query(sqlDeleteTeam, [id], (err) => {
         if (err) {
             console.error('Erro ao remover equipe do projeto:', err);
             return res.status(500).json({ message: 'Erro ao remover equipe do projeto' });
         }
 
-        db.query('DELETE FROM projetos WHERE id = ?', [id], (err, result) => {
+        // Agora, exclua o projeto
+        const sqlDeleteProject = 'DELETE FROM projetos WHERE id = ?';
+        db.query(sqlDeleteProject, [id], (err, results) => {
             if (err) {
                 console.error('Erro ao excluir projeto:', err);
                 return res.status(500).json({ message: 'Erro ao excluir projeto' });
             }
 
-            if (result.affectedRows === 0) {
-                res.status(404).json({ message: 'Projeto não encontrado' });
-            } else {
-                res.json({ message: 'Projeto excluído com sucesso!' });
+            if (results.affectedRows === 0) {
+                return res.status(404).json({ message: 'Projeto não encontrado' });
             }
+
+            res.json({ message: 'Projeto excluído com sucesso' });
         });
     });
-});*/
+});
 
 // Iniciar o servidor
 app.listen(port, () => {

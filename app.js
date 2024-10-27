@@ -497,5 +497,50 @@ document.addEventListener('DOMContentLoaded', function () {
 // Adiciona o evento de envio ao botão Criar/Alterar Projeto
     document.getElementById('create-project-form').addEventListener('submit', submitForm);
 
+// Função para excluir um projeto
+    document.getElementById('delete-project').addEventListener('click', async () => {
+        const projectId = document.getElementById('project-id').value; // Obter o ID do projeto selecionado
+
+        if (!projectId) {
+            alert('Por favor, selecione um projeto para excluir.');
+            return;
+        }
+
+        const confirmDelete = confirm('Tem certeza que deseja excluir este projeto?'); // Confirmação
+
+        if (!confirmDelete) {
+            return; // Cancela a operação se o usuário não confirmar
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3000/projects/${projectId}`, {
+                method: 'DELETE', // Método de exclusão
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                alert('Projeto excluído com sucesso!'); // Mensagem de sucesso
+                window.location.reload(); // Recarrega a página
+            } else {
+                const result = await response.json();
+                alert('Erro ao excluir projeto: ' + result.message); // Mensagem de erro
+            }
+        } catch (error) {
+            console.error('Erro na requisição:', error);
+            alert('Erro na requisição');
+        }
+    });
+
+// Função para limpar o formulário
+    function clearForm() {
+        document.getElementById('project-id').value = '';
+        document.getElementById('project-nome').value = '';
+        document.getElementById('product-owner').selectedIndex = 0;
+        document.getElementById('scrum-master').selectedIndex = 0;
+        const teamSelect = document.getElementById('team');
+        Array.from(teamSelect.selectedOptions).forEach(option => option.selected = false); // Deselect all team members
+    }
 
 });
