@@ -348,6 +348,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    // Função para carregar dados de um projeto específico (dois)
     // Função para carregar dados de um projeto específico
     function loadProjectData(projectId) {
         fetch(`http://localhost:3000/projects/${projectId}`)
@@ -363,30 +364,34 @@ document.addEventListener('DOMContentLoaded', function () {
                         const productOwnerSelect = document.getElementById('product-owner');
                         const scrumMasterSelect = document.getElementById('scrum-master');
 
-                        // Limpar e preencher as listas suspensas
+                        // Limpar as listas suspensas antes de preenchê-las
                         productOwnerSelect.innerHTML = '<option value="">Selecione o Product Owner</option>';
                         scrumMasterSelect.innerHTML = '<option value="">Selecione o Scrum Master</option>';
 
                         persons.forEach(person => {
-                            const option = document.createElement('option');
-                            option.value = person.matricula;
-                            option.textContent = person.nome;
-                            productOwnerSelect.appendChild(option.cloneNode(true)); // Clonando para adicionar ao Scrum Master também
-                            scrumMasterSelect.appendChild(option);
+                            const poOption = document.createElement('option');
+                            poOption.value = person.matricula;
+                            poOption.textContent = person.nome;
+                            productOwnerSelect.appendChild(poOption);
+
+                            const smOption = document.createElement('option');
+                            smOption.value = person.matricula;
+                            smOption.textContent = person.nome;
+                            scrumMasterSelect.appendChild(smOption);
                         });
 
-                        // Definir a seleção para Product Owner e Scrum Master
-                        if (productOwnerSelect && project.product_owner_matricula) {
+                        // Definir o valor selecionado para Product Owner e Scrum Master
+                        if (productOwnerSelect && project.product_owner_matricula !== undefined) {
                             productOwnerSelect.value = project.product_owner_matricula;
                         }
 
-                        if (scrumMasterSelect && project.scrum_master_matricula) {
+                        if (scrumMasterSelect && project.scrum_master_matricula !== undefined) {
                             scrumMasterSelect.value = project.scrum_master_matricula;
                         }
                     });
 
                 // Carregar equipe
-                fetch(`http://localhost:3000/projects/${projectId}/team-members`)
+                fetch(`http://localhost:3000/project/${projectId}/team-members`)
                     .then(response => response.json())
                     .then(data => {
                         const teamSelect = document.getElementById('team');
@@ -396,9 +401,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const option = document.createElement('option');
                             option.value = member.matricula;
                             option.textContent = member.nome;
-                            if (member.selected) {
-                                option.selected = true;
-                            }
+                            option.selected = member.selected; // Define selected diretamente
                             teamSelect.appendChild(option);
                         });
                     })
@@ -414,4 +417,105 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Listar projetos ao clicar no botão
     listProjectsButton.addEventListener('click', loadProjects);
+
+// Flag para evitar múltiplos envios
+    let isSubmitting = false;
+
+    function submitForm(event) {
+        event.preventDefault();
+
+        // Se já está submetendo, interrompe o processo
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        const projectId = document.getElementById('project-id').value; // ID do projeto a ser alterado (se existir)
+        const nome = document.getElementById('project-nome').value.trim();
+        const productOwner = document.getElementById('product-owner').value;
+        const scrumMaster = document.getElementById('scrum-master').value;
+        const teamMembers = Array.from(document.getElementById('team').selectedOptions)
+            .map(option => option.value);
+
+        // Verificação para garantir que os dados estejam preenchidos
+        if (!nome || !productOwner || !scrumMaster || teamMembers.length === 0) {
+            alert("Por favor, preencha todos os campos obrigatórios.");
+            isSubmitting = false;
+            return;
+        }
+
+        // Preparar dados para envio
+        const projectData = {
+            nome,
+            product_owner_matricula: productOwner, // Mudado para incluir o "matricula"
+            scrum_master_matricula: scrumMaster, // Mudado para incluir o "matricula"
+            team_members: teamMembers // Alterado para corresponder ao que o backend espera
+        };
+
+        console.log('Dados do projeto a serem enviados:', projectData);
+
+        // Se temos um projectId, atualizar o projeto existente; senão, criar um novo
+        if (projectId) {
+            console.log('Atualizando projeto:', projectId);
+            fetch(`http://localhost:3000/projects/${projectId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(projectData)
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro na atualização do projeto');
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Projeto atualizado com sucesso!');
+                    loadProjects(); // Atualiza a lista de projetos
+                    clearForm(); // Limpa o formulário
+                    isSubmitting = false;
+                })
+                .catch(error => {
+                    console.error('Erro ao atualizar o projeto:', error);
+                    alert('Erro ao atualizar o projeto');
+                    isSubmitting = false;
+                });
+        } else {
+            // Criando novo projeto
+            console.log('Criando novo projeto');
+            fetch('http://localhost:3000/projects', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(projectData)
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro na criação do projeto');
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Projeto criado com sucesso!');
+                    loadProjects();
+                    clearForm();
+                    isSubmitting = false;
+                })
+                .catch(error => {
+                    console.error('Erro ao criar o projeto:', error);
+                    alert('Erro ao criar o projeto');
+                    isSubmitting = false;
+                });
+        }
+    }
+
+// Função para limpar o formulário
+    function clearForm() {
+        document.getElementById('project-id').value = '';
+        document.getElementById('project-nome').value = '';
+        document.getElementById('product-owner').value = '';
+        document.getElementById('scrum-master').value = '';
+        document.getElementById('team').value = '';
+    }
+
+// Adiciona o evento de envio ao botão Criar/Alterar Projeto
+    document.getElementById('create-project-form').addEventListener('submit', submitForm);
+
+
 });

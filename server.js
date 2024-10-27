@@ -298,11 +298,11 @@ app.get('/projects/:id', (req, res) => {
 // Rota para atualizar um projeto
 app.put('/projects/:id', (req, res) => {
     const { id } = req.params;
-    const { nome, product_owner, scrum_master, team_ids } = req.body;
+    const { nome, product_owner_matricula, scrum_master_matricula, team_members } = req.body;
 
     // Atualizar o projeto
     const sqlProject = 'UPDATE projetos SET nome = ?, product_owner = ?, scrum_master = ? WHERE id = ?';
-    db.query(sqlProject, [nome, product_owner, scrum_master, id], (err) => {
+    db.query(sqlProject, [nome, product_owner_matricula, scrum_master_matricula, id], (err) => {
         if (err) {
             console.error('Erro ao atualizar projeto:', err);
             return res.status(500).json({ message: 'Erro ao atualizar projeto' });
@@ -316,9 +316,9 @@ app.put('/projects/:id', (req, res) => {
                 return res.status(500).json({ message: 'Erro ao remover equipe do projeto' });
             }
 
-            if (team_ids && team_ids.length > 0) {
+            if (team_members && team_members.length > 0) {
                 const insertTeamQuery = 'INSERT INTO equipe_projeto (projeto_id, pessoa_id) VALUES ?';
-                const teamValues = team_ids.map(pessoaId => [id, pessoaId]);
+                const teamValues = team_members.map(pessoaId => [id, pessoaId]);
 
                 db.query(insertTeamQuery, [teamValues], (err) => {
                     if (err) {
