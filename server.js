@@ -336,6 +336,7 @@ app.put('/projects/:id', (req, res) => {
 });
 
 
+
 /*// Rota para excluir um projeto
 app.delete('/projects/:id', (req, res) => {
     const { id } = req.params;

@@ -271,6 +271,15 @@ if (createProjectForm) {
     createProjectForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        // Obter o ID do projeto atual
+        const projectId = document.getElementById('project-id').value;
+
+        // Se o ID do projeto estiver definido, não criar um novo projeto
+        if (projectId) {
+            alert('Você está editando um projeto existente. Use o botão de salvar para atualizar.');
+            return; // Impede a criação de um novo projeto
+        }
+
         const nome = document.getElementById('project-nome').value;
         const productOwner = document.getElementById('product-owner').value;
         const scrumMaster = document.getElementById('scrum-master').value;
@@ -428,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isSubmitting) return;
         isSubmitting = true;
 
-        const projectId = document.getElementById('project-id').value; // ID do projeto a ser alterado (se existir)
+        const projectId = document.getElementById('project-id').value; // ID do projeto a ser alterado
         const nome = document.getElementById('project-nome').value.trim();
         const productOwner = document.getElementById('product-owner').value;
         const scrumMaster = document.getElementById('scrum-master').value;
@@ -445,64 +454,35 @@ document.addEventListener('DOMContentLoaded', function () {
         // Preparar dados para envio
         const projectData = {
             nome,
-            product_owner_matricula: productOwner, // Mudado para incluir o "matricula"
-            scrum_master_matricula: scrumMaster, // Mudado para incluir o "matricula"
-            team_members: teamMembers // Alterado para corresponder ao que o backend espera
+            product_owner_matricula: productOwner,
+            scrum_master_matricula: scrumMaster,
+            team_members: teamMembers
         };
 
         console.log('Dados do projeto a serem enviados:', projectData);
 
-        // Se temos um projectId, atualizar o projeto existente; senão, criar um novo
-        if (projectId) {
-            console.log('Atualizando projeto:', projectId);
-            fetch(`http://localhost:3000/projects/${projectId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(projectData)
+        // Atualizando o projeto existente
+        console.log('Atualizando projeto:', projectId);
+        fetch(`http://localhost:3000/projects/${projectId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(projectData)
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Erro na atualização do projeto');
+                return response.json();
             })
-                .then(response => {
-                    if (!response.ok) throw new Error('Erro na atualização do projeto');
-                    return response.json();
-                })
-                .then(data => {
-                    alert('Projeto atualizado com sucesso!');
-                    loadProjects(); // Atualiza a lista de projetos
-                    clearForm(); // Limpa o formulário
-                    isSubmitting = false;
-                })
-                .catch(error => {
-                    console.error('Erro ao atualizar o projeto:', error);
-                    alert('Erro ao atualizar o projeto');
-                    isSubmitting = false;
-                });
-        } else {
-            // Criando novo projeto
-            console.log('Criando novo projeto');
-            fetch('http://localhost:3000/projects', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(projectData)
+            .then(data => {
+                alert('Projeto atualizado com sucesso!');
+                window.location.reload(); // Recarrega a página
             })
-                .then(response => {
-                    if (!response.ok) throw new Error('Erro na criação do projeto');
-                    return response.json();
-                })
-                .then(data => {
-                    alert('Projeto criado com sucesso!');
-                    loadProjects();
-                    clearForm();
-                    isSubmitting = false;
-                })
-                .catch(error => {
-                    console.error('Erro ao criar o projeto:', error);
-                    alert('Erro ao criar o projeto');
-                    isSubmitting = false;
-                });
-        }
+            .catch(error => {
+                console.error('Erro ao atualizar o projeto:', error);
+                alert('Erro ao atualizar o projeto: ' + error.message);
+                isSubmitting = false;
+            });
     }
 
 // Função para limpar o formulário
