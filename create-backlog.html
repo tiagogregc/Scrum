@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +21,7 @@
     <form id="create-backlog-form">
         <label for="projectCode">Código do Projeto:</label>
         <select id="projectCode" name="codigo_projeto" required>
-            <!-- Options will be populated dynamically -->
+            <option value="">Selecione um Projeto</option>
         </select>
 
         <label for="backlogID">Backlog ID:</label>
@@ -31,7 +31,7 @@
         <input type="text" id="backlogName" name="nome" required>
 
         <label for="scrumMaster">Scrum Master:</label>
-        <input type="text" id="scrumMaster" name="scrum_master_nome" readonly> <!-- Campo não editável -->
+        <input type="text" id="scrumMaster" name="scrum_master_nome" readonly>
 
         <label for="descricaoBacklog">Descrição do Backlog:</label>
         <textarea id="descricaoBacklog" name="descricao" rows="4" maxlength="5000" required></textarea>
@@ -53,7 +53,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
-
-
-

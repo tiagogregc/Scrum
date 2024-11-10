@@ -207,16 +207,17 @@ if (fetchPersonsButton) {
     console.error('Botão de buscar pessoas não encontrado.');
 }
 
-// Função para carregar o próximo ID do projeto e a lista de pessoas
+// Função para carregar a lista de pessoas e exibir o próximo ID no campo "projeto-id" (sem envio na criação)
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Fetch the next project ID
+        // Obtenha o próximo ID para exibir no front-end
         const projectResponse = await fetch('http://localhost:3000/next-project-id');
         const projectResult = await projectResponse.json();
         if (projectResponse.ok) {
             const projectIdElement = document.getElementById('project-id');
             if (projectIdElement) {
-                projectIdElement.value = projectResult.nextProjectId; // Define o valor do campo ID do projeto
+                projectIdElement.value = projectResult.nextProjectId;
+                projectIdElement.disabled = true; // Desativar o campo para evitar envio no formulário
             } else {
                 console.error('Elemento para o próximo ID do projeto não encontrado.');
             }
@@ -233,22 +234,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const teamSelect = document.getElementById('team');
 
             if (productOwnerSelect && scrumMasterSelect && teamSelect) {
-                // Limpa as opções duplicadas antes de adicionar novas
                 productOwnerSelect.innerHTML = '<option value="">Selecione o Product Owner</option>';
                 scrumMasterSelect.innerHTML = '<option value="">Selecione o Scrum Master</option>';
                 teamSelect.innerHTML = '';
 
-                // Preenche as listas suspensas
                 persons.forEach(person => {
                     const option = document.createElement('option');
                     option.value = person.matricula;
                     option.textContent = person.nome;
 
-                    // Adiciona a opção ao Product Owner e Scrum Master
                     productOwnerSelect.appendChild(option.cloneNode(true));
                     scrumMasterSelect.appendChild(option.cloneNode(true));
 
-                    // Adiciona a opção de equipe
                     const teamOption = document.createElement('option');
                     teamOption.value = person.matricula;
                     teamOption.textContent = person.nome;
@@ -265,70 +262,104 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Função para criar um projeto
-const createProjectForm = document.getElementById('create-project-form');
-if (createProjectForm) {
-    createProjectForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        // Obter o ID do projeto atual
-        const projectId = document.getElementById('project-id').value;
-
-        // Se o ID do projeto estiver definido, não criar um novo projeto
-        if (projectId) {
-            alert('Você está editando um projeto existente. Use o botão de salvar para atualizar.');
-            return; // Impede a criação de um novo projeto
-        }
-
-        const nome = document.getElementById('project-nome').value;
-        const productOwner = document.getElementById('product-owner').value;
-        const scrumMaster = document.getElementById('scrum-master').value;
-
-        // Obter IDs da equipe selecionada
-        const teamSelect = document.getElementById('team');
-        const teamIds = teamSelect ? Array.from(teamSelect.selectedOptions).map(option => option.value) : [];
-
-        try {
-            const response = await fetch('http://localhost:3000/projects', {  // Alteração aqui: de 'project' para 'projects'
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ nome, product_owner: productOwner, scrum_master: scrumMaster, team_ids: teamIds }),
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                alert('Projeto cadastrado com sucesso! ID: ' + result.projectId); // Corrigido para 'result.projectId'
-                createProjectForm.reset();
-                // Atualizar próximo ID do projeto
-                const refreshResponse = await fetch('http://localhost:3000/next-project-id');
-                const refreshResult = await refreshResponse.json();
-                if (refreshResponse.ok) {
-                    const projectIdElement = document.getElementById('project-id');
-                    if (projectIdElement) {
-                        projectIdElement.value = refreshResult.nextProjectId;
-                    }
-                }
-            } else {
-                alert('Erro ao cadastrar projeto: ' + result.message);
-            }
-        } catch (error) {
-            console.error('Erro na requisição:', error);
-            alert('Erro na requisição');
-        }
-    });
-} else {
-    console.error('Formulário de criação de projeto não encontrado.');
+// Função para verificar se o projeto já existe no banco de dados
+async function checkProjectExists(projectId) {
+    const response = await fetch(`http://localhost:3000/projects/check-existence/${projectId}`);
+    const result = await response.json();
+    return result.exists;
 }
 
+// Função para submeter o formulário de criação ou atualização de projeto
+let isSubmitting = false;
+
+async function submitForm(event) {
+    event.preventDefault();
+
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    const nome = document.getElementById('project-nome').value.trim();
+    const productOwner = document.getElementById('product-owner').value;
+    const scrumMaster = document.getElementById('scrum-master').value;
+    const teamMembers = Array.from(document.getElementById('team').selectedOptions)
+        .map(option => option.value);
+
+    if (!nome || !productOwner || !scrumMaster || teamMembers.length === 0) {
+        alert("Por favor, preencha todos os campos obrigatórios.");
+        isSubmitting = false;
+        return;
+    }
+
+    const projectData = {
+        nome,
+        product_owner_matricula: productOwner,
+        scrum_master_matricula: scrumMaster,
+        team_members: teamMembers
+    };
+
+    try {
+        const projectIdElement = document.getElementById('project-id');
+        const projectId = projectIdElement ? projectIdElement.value.trim() : null;
+        const isUpdate = await checkProjectExists(projectId);
+
+        if (isUpdate) {
+            console.log('Atualizando projeto:', projectId);
+            await fetch(`http://localhost:3000/projects/${projectId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(projectData)
+            });
+            alert('Projeto atualizado com sucesso!');
+        } else {
+            console.log('Criando novo projeto');
+            const response = await fetch('http://localhost:3000/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(projectData)
+            });
+            const data = await response.json();
+            alert('Projeto criado com sucesso com ID: ' + data.projectId);
+        }
+
+        window.location.reload();
+    } catch (error) {
+        console.error('Erro ao salvar o projeto:', error);
+        alert('Erro ao salvar o projeto: ' + error.message);
+    } finally {
+        isSubmitting = false;
+    }
+}
+
+// Função para adicionar membros à equipe após a criação do projeto
+function addTeamMembers(projectId, teamMembers) {
+    const teamData = teamMembers.map(pessoa_id => ({
+        projeto_id: projectId,
+        pessoa_id: pessoa_id
+    }));
+
+    return fetch('http://localhost:3000/addTeamMembers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ members: teamData })
+    })
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao adicionar membros à equipe');
+            return response.json();
+        })
+        .catch(error => {
+            console.error('Erro ao adicionar membros à equipe:', error);
+            throw error;
+        });
+}
+
+// Função para carregar a lista de projetos
 document.addEventListener('DOMContentLoaded', function () {
     const listProjectsButton = document.getElementById('list-projects');
     const projectsTableBody = document.getElementById('projects-table-body');
     let currentProjectId = null;
 
-    // Função para carregar a lista de projetos
     function loadProjects() {
         fetch('http://localhost:3000/projects')
             .then(response => response.json())
@@ -357,8 +388,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Função para carregar dados de um projeto específico (dois)
-    // Função para carregar dados de um projeto específico
     function loadProjectData(projectId) {
         fetch(`http://localhost:3000/projects/${projectId}`)
             .then(response => response.json())
@@ -366,14 +395,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('project-id').value = project.id;
                 document.getElementById('project-nome').value = project.nome;
 
-                // Carregar e preencher as listas suspensas de Product Owner e Scrum Master
                 fetch('http://localhost:3000/persons')
                     .then(response => response.json())
                     .then(persons => {
                         const productOwnerSelect = document.getElementById('product-owner');
                         const scrumMasterSelect = document.getElementById('scrum-master');
 
-                        // Limpar as listas suspensas antes de preenchê-las
                         productOwnerSelect.innerHTML = '<option value="">Selecione o Product Owner</option>';
                         scrumMasterSelect.innerHTML = '<option value="">Selecione o Scrum Master</option>';
 
@@ -389,7 +416,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             scrumMasterSelect.appendChild(smOption);
                         });
 
-                        // Definir o valor selecionado para Product Owner e Scrum Master
                         if (productOwnerSelect && project.product_owner_matricula !== undefined) {
                             productOwnerSelect.value = project.product_owner_matricula;
                         }
@@ -399,7 +425,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     });
 
-                // Carregar equipe
                 fetch(`http://localhost:3000/project/${projectId}/team-members`)
                     .then(response => response.json())
                     .then(data => {
@@ -410,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const option = document.createElement('option');
                             option.value = member.matricula;
                             option.textContent = member.nome;
-                            option.selected = member.selected; // Define selected diretamente
+                            option.selected = member.selected;
                             teamSelect.appendChild(option);
                         });
                     })
@@ -424,123 +449,50 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Listar projetos ao clicar no botão
     listProjectsButton.addEventListener('click', loadProjects);
+});
 
-// Flag para evitar múltiplos envios
-    let isSubmitting = false;
-
-    function submitForm(event) {
-        event.preventDefault();
-
-        // Se já está submetendo, interrompe o processo
-        if (isSubmitting) return;
-        isSubmitting = true;
-
-        const projectId = document.getElementById('project-id').value; // ID do projeto a ser alterado
-        const nome = document.getElementById('project-nome').value.trim();
-        const productOwner = document.getElementById('product-owner').value;
-        const scrumMaster = document.getElementById('scrum-master').value;
-        const teamMembers = Array.from(document.getElementById('team').selectedOptions)
-            .map(option => option.value);
-
-        // Verificação para garantir que os dados estejam preenchidos
-        if (!nome || !productOwner || !scrumMaster || teamMembers.length === 0) {
-            alert("Por favor, preencha todos os campos obrigatórios.");
-            isSubmitting = false;
-            return;
-        }
-
-        // Preparar dados para envio
-        const projectData = {
-            nome,
-            product_owner_matricula: productOwner,
-            scrum_master_matricula: scrumMaster,
-            team_members: teamMembers
-        };
-
-        console.log('Dados do projeto a serem enviados:', projectData);
-
-        // Atualizando o projeto existente
-        console.log('Atualizando projeto:', projectId);
-        fetch(`http://localhost:3000/projects/${projectId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(projectData)
-        })
-            .then(response => {
-                if (!response.ok) throw new Error('Erro na atualização do projeto');
-                return response.json();
-            })
-            .then(data => {
-                alert('Projeto atualizado com sucesso!');
-                window.location.reload(); // Recarrega a página
-            })
-            .catch(error => {
-                console.error('Erro ao atualizar o projeto:', error);
-                alert('Erro ao atualizar o projeto: ' + error.message);
-                isSubmitting = false;
-            });
-    }
-
-// Função para limpar o formulário
-    function clearForm() {
-        document.getElementById('project-id').value = '';
-        document.getElementById('project-nome').value = '';
-        document.getElementById('product-owner').value = '';
-        document.getElementById('scrum-master').value = '';
-        document.getElementById('team').value = '';
-    }
-
-// Adiciona o evento de envio ao botão Criar/Alterar Projeto
-    document.getElementById('create-project-form').addEventListener('submit', submitForm);
+// Adicione o listener de submit
+document.getElementById('create-project-form').addEventListener('submit', submitForm);
 
 // Função para excluir um projeto
-    document.getElementById('delete-project').addEventListener('click', async () => {
-        const projectId = document.getElementById('project-id').value; // Obter o ID do projeto selecionado
+document.getElementById('delete-project').addEventListener('click', async () => {
+    const projectId = document.getElementById('project-id').value;
 
-        if (!projectId) {
-            alert('Por favor, selecione um projeto para excluir.');
-            return;
-        }
-
-        const confirmDelete = confirm('Tem certeza que deseja excluir este projeto?'); // Confirmação
-
-        if (!confirmDelete) {
-            return; // Cancela a operação se o usuário não confirmar
-        }
-
-        try {
-            const response = await fetch(`http://localhost:3000/projects/${projectId}`, {
-                method: 'DELETE', // Método de exclusão
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (response.ok) {
-                alert('Projeto excluído com sucesso!'); // Mensagem de sucesso
-                window.location.reload(); // Recarrega a página
-            } else {
-                const result = await response.json();
-                alert('Erro ao excluir projeto: ' + result.message); // Mensagem de erro
-            }
-        } catch (error) {
-            console.error('Erro na requisição:', error);
-            alert('Erro na requisição');
-        }
-    });
-
-// Função para limpar o formulário
-    function clearForm() {
-        document.getElementById('project-id').value = '';
-        document.getElementById('project-nome').value = '';
-        document.getElementById('product-owner').selectedIndex = 0;
-        document.getElementById('scrum-master').selectedIndex = 0;
-        const teamSelect = document.getElementById('team');
-        Array.from(teamSelect.selectedOptions).forEach(option => option.selected = false); // Deselect all team members
+    if (!projectId) {
+        alert('Por favor, selecione um projeto para excluir.');
+        return;
     }
 
+    const confirmDelete = confirm('Tem certeza que deseja excluir este projeto?');
+
+    if (!confirmDelete) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`http://localhost:3000/projects/${projectId}`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            alert('Projeto excluído com sucesso!');
+            window.location.reload(); // Recarrega a página
+        } else {
+            alert('Erro ao excluir o projeto.');
+        }
+    } catch (error) {
+        console.error('Erro ao excluir o projeto:', error);
+        alert('Erro ao excluir o projeto: ' + error.message);
+    }
 });
+
+// Função para limpar o formulário
+function clearForm() {
+    document.getElementById('project-id').value = '';
+    document.getElementById('project-nome').value = '';
+    document.getElementById('product-owner').selectedIndex = 0;
+    document.getElementById('scrum-master').selectedIndex = 0;
+    const teamSelect = document.getElementById('team');
+    Array.from(teamSelect.selectedOptions).forEach(option => option.selected = false); // Deselect all team members
+}
