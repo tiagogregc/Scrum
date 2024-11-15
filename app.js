@@ -496,3 +496,94 @@ function clearForm() {
     const teamSelect = document.getElementById('team');
     Array.from(teamSelect.selectedOptions).forEach(option => option.selected = false); // Deselect all team members
 }
+
+// Função para carregar a lista de projetos no dropdown de "Código do Projeto"
+async function loadProjectList() {
+    console.log("Carregando lista de projetos...");
+    const projectDropdown = document.getElementById('projectCode');
+
+    // Verifica se o dropdown de projetos existe antes de manipular
+    if (!projectDropdown) {
+        console.error('Dropdown de projetos não encontrado.');
+        return;
+    }
+
+    projectDropdown.innerHTML = '<option value="">Carregando...</option>'; // Estado de carregamento
+
+    try {
+        const response = await fetch('http://localhost:3000/projects-list'); // Verifique o domínio do backend
+        if (!response.ok) {
+            throw new Error('Erro ao carregar a lista de projetos');
+        }
+        const projects = await response.json();
+
+        projectDropdown.innerHTML = '<option value="">Selecione um Projeto</option>'; // Limpa e preenche o dropdown
+        projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.nome;
+            projectDropdown.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar lista de projetos:', error);
+        projectDropdown.innerHTML = '<option value="">Erro ao carregar projetos</option>'; // Estado de erro
+    }
+}
+
+// Função para submeter o formulário de criação de backlog
+async function submitBacklogForm(event) {
+    event.preventDefault();
+
+    const projectCode = document.getElementById('projectCode').value;
+    const backlogName = document.getElementById('backlogName').value;
+    const descricaoBacklog = document.getElementById('descricaoBacklog').value;
+    const prazoBacklog = document.getElementById('prazoBacklog').value;
+    const situacaoBacklog = document.getElementById('situacaoBacklog').value;
+
+    if (!projectCode) {
+        alert('Selecione um projeto.');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://localhost:3000/backlogs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                codigo_projeto: projectCode,
+                nome: backlogName,
+                descricao: descricaoBacklog,
+                prazo: prazoBacklog,
+                situacao: situacaoBacklog,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro ao salvar o backlog');
+        }
+
+        const result = await response.json();
+        alert('Backlog criado com sucesso! ID do backlog: ' + result.backlogId);
+
+        document.getElementById('create-backlog-form').reset();
+    } catch (error) {
+        console.error('Erro ao salvar o backlog:', error);
+        alert('Erro ao salvar o backlog.');
+    }
+}
+
+// Evento DOMContentLoaded para garantir que o código seja executado quando o DOM estiver completamente carregado
+document.addEventListener('DOMContentLoaded', function () {
+    // Chama a função diretamente para garantir o carregamento da lista de projetos
+    loadProjectList();
+
+    // Adiciona evento de submit ao formulário de criação de backlog
+    const backlogForm = document.getElementById('create-backlog-form');
+    if (backlogForm) {
+        backlogForm.addEventListener('submit', submitBacklogForm);
+    } else {
+        console.error('Formulário de criação de backlog não encontrado.');
+    }
+});

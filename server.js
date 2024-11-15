@@ -403,6 +403,52 @@ app.post('/projects', async (req, res) => {
         });
     });
 
+// Rota para obter o próximo ID de backlog
+app.get('/next-backlog-id', async (req, res) => {
+    try {
+        const [rows] = await db.promise().query('SELECT MAX(id) AS maxId FROM backlogs');
+        const nextBacklogId = rows[0].maxId ? rows[0].maxId + 1 : 1;
+        res.json({ nextBacklogId });
+    } catch (error) {
+        console.error('Erro ao obter o próximo ID de backlog:', error);
+        res.status(500).json({ message: 'Erro ao obter o próximo ID de backlog' });
+    }
+});
+
+// Rota para criar um novo backlog
+app.post('/backlogs', async (req, res) => {
+    const { codigo_projeto, nome, descricao, prazo, situacao } = req.body;
+
+    try {
+        const [result] = await db.promise().execute(
+            'INSERT INTO backlogs (codigo_projeto, nome, descricao, prazo, situacao) VALUES (?, ?, ?, ?, ?)',
+            [codigo_projeto, nome, descricao, prazo, situacao]
+        );
+
+        if (result.affectedRows === 1) {
+            res.status(201).json({ message: 'Backlog criado com sucesso', backlogId: result.insertId });
+        } else {
+            throw new Error('Erro ao criar backlog');
+        }
+    } catch (error) {
+        console.error('Erro ao criar backlog:', error);
+        res.status(500).json({ message: 'Erro ao criar backlog' });
+    }
+});
+
+// Rota para obter todos os projetos
+app.get('/projects-list', async (req, res) => {
+    try {
+        const [rows] = await db.promise().query(
+            'SELECT id, nome FROM projetos'
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro ao buscar lista de projetos:', error);
+        res.status(500).json({ message: 'Erro ao buscar lista de projetos' });
+    }
+});
+
 // Iniciar o servidor
 app.listen(port, () => {
     console.log(`Servidor rodando em http://localhost:${port}`);
